@@ -1,57 +1,92 @@
-#include <stdio.h>
-#include <raylib.h>
-#include <raymath.h>
+#include "raylib.h"
+#include <math.h>
 
-const int HEIGHT = 800;
-const int WIDTH = 1200;
+#define GRID_SIZE 80
+#define HALF_GRID (GRID_SIZE / 2)
 
-Shader gridShader;
+int main(void)
+{
+    const int screenWidth = 1200;
+    const int screenHeight = 800;
 
-int main(void) {
-    InitWindow(WIDTH, HEIGHT, "CLow");
-    SetTargetFPS(60);
+    InitWindow(screenWidth, screenHeight, "Black Hole Simulation");
+    SetTargetFPS(120);
 
-    gridShader = LoadShader("grid_vs.glsl", "grid_fs.glsl");
-
-    const float GRID_SPACING = 1.0f;
-    const float GRID_WIDTH = 0.02f;
-    const float QUAD_SIZE = 1000.0f;
-
-    int spacingLoc = GetShaderLocation(gridShader, "gridSpacing");
-    int widthLoc = GetShaderLocation(gridShader, "gridWidth");
-    int lineColorLoc = GetShaderLocation(gridShader, "lineColor");
-
-    Vector4 lineColor = { 0.5f, 0.5f, 0.5f, 1.0f }; // Dark Gray
-    SetShaderValue(gridShader, spacingLoc, &GRID_SPACING, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(gridShader, widthLoc, &GRID_WIDTH, SHADER_UNIFORM_FLOAT);
-    SetShaderValue(gridShader, lineColorLoc, &lineColor, SHADER_UNIFORM_VEC4);
-
-    Model gridModel = LoadModelFromMesh(GenMeshPlane(QUAD_SIZE, QUAD_SIZE, 1, 1));
-    gridModel.materials[0].shader = gridShader;
-
-
-    Camera3D camera = { 0 };
-    camera.position = (Vector3){ 4.0f, 4.0f, 4.0f };
+    Camera3D camera = {0};
+    camera.position = (Vector3){ 60.0f, 50.0f, 60.0f };
     camera.target = (Vector3){ 0.0f, 0.0f, 0.0f };
     camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
     camera.fovy = 60.0f;
     camera.projection = CAMERA_PERSPECTIVE;
 
-    while (!WindowShouldClose()) {
+    Vector3 grid[GRID_SIZE][GRID_SIZE];
+
+    // Initialize grid positions
+    for (int x = 0; x < GRID_SIZE; x++)
+    {
+        for (int z = 0; z < GRID_SIZE; z++)
+        {
+            grid[x][z] = (Vector3){ x - HALF_GRID, 0.0f, z - HALF_GRID };
+        }
+    }
+
+    Vector3 blackHolePos = { 0.0f, 0.0f, 0.0f };
+    float blackHoleMass = 50.0f;
+    float radius = 2.5f;
+
+    while (!WindowShouldClose())
+    {
         UpdateCamera(&camera, CAMERA_FREE);
+
+        float time = GetTime();
+
+        // Apply deformation for curvature
+        for (int x = 0; x < GRID_SIZE; x++)
+        {
+            for (int z = 0; z < GRID_SIZE; z++)
+            {
+                float dx = grid[x][z].x - blackHolePos.x;
+                float dz = grid[x][z].z - blackHolePos.z;
+                float dist = sqrtf(dx*dx + dz*dz);
+
+                float well = -blackHoleMass / (dist + radius);
+                float wave = sinf(time * 2.5f + dist * 0.5f) * 0.4f;
+
+                grid[x][z].y = well + wave;
+            }
+        }
+
         BeginDrawing();
         ClearBackground(BLACK);
+
         BeginMode3D(camera);
 
-        DrawModel(gridModel, (Vector3){ 0.0f, 0.0f, 0.0f }, 1.0f, WHITE);
+        // Wireframe grid lines
+        for (int x = 0; x < GRID_SIZE; x++)
+        {
+            for (int z = 0; z < GRID_SIZE - 1; z++)
+            {
+                DrawLine3D(grid[x][z], grid[x][z+1], WHITE);
+            }
+        }
 
-        DrawSphere((Vector3){0.0f, 1.0f, 0.0f}, 1.0f, BLACK);
+        for (int z = 0; z < GRID_SIZE; z++)
+        {
+            for (int x = 0; x < GRID_SIZE - 1; x++)
+            {
+                DrawLine3D(grid[x][z], grid[x+1][z], GRAY);
+            }
+        }
+
+        // Draw black hole representation
+        DrawSphere(blackHolePos, 3.0f, BLACK);
 
         EndMode3D();
+
+        DrawFPS(10, 10);
         EndDrawing();
     }
-    UnloadModel(gridModel);
-    UnloadShader(gridShader);
+
     CloseWindow();
     return 0;
 }
